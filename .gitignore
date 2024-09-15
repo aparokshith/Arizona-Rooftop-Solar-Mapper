@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+ENV/
+
+# PyCharm
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
