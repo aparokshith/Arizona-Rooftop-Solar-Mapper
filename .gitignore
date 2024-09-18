@@ -13,3 +13,7 @@ ENV/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+#data
+NSRDB Raw
+processed_solar_data.parquet
