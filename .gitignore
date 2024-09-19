@@ -17,3 +17,4 @@ Thumbs.db
 #data
 NSRDB Raw
 processed_solar_data.parquet
+data/raw
