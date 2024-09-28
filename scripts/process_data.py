@@ -46,7 +46,8 @@ cities = gpd.read_file('data/raw/city_boundaries/tl_2023_04_place.shp')
 print("City boundaries loaded.")
 
 # Define target cities
-target_cities = ['Phoenix', 'Tucson', 'Tempe', 'Mesa', 'Flagstaff']
+# target_cities = ['Phoenix', 'Tucson', 'Tempe', 'Mesa', 'Flagstaff']
+target_cities = ['Phoenix']
 
 
 def calculate_solar_potential(row, avg_rate):
@@ -62,8 +63,8 @@ def calculate_solar_potential(row, avg_rate):
     poa_reflected = row['GHI'] * 0.2 * (1 - np.cos(np.radians(tilt))) / 2  # Assuming ground reflectance of 0.2
     poa_total = poa_direct + poa_diffuse + poa_reflected
 
-    # Calculate solar potential
-    solar_potential = row['roof_area'] * poa_total * panel_efficiency * (1 - system_losses)
+    # Calculate solar potential (kWh per year)
+    solar_potential = row['roof_area'] * poa_total * panel_efficiency * (1 - system_losses) * 365 / 1000
 
     # Calculate estimated savings
     estimated_savings = solar_potential * avg_rate
@@ -77,7 +78,6 @@ def calculate_solar_potential(row, avg_rate):
 def process_city_buildings(city_name, city_boundary, annual_solar_gdf, avg_rate):
     print(f"Processing {city_name}...")
 
-
     chunksize = 100000
     city_buildings = gpd.GeoDataFrame(columns=['geometry'], geometry='geometry', crs='EPSG:4326')
 
@@ -86,7 +86,7 @@ def process_city_buildings(city_name, city_boundary, annual_solar_gdf, avg_rate)
             chunk = gpd.read_file('data/raw/building_footprints/Arizona.geojson', rows=slice(i, i + chunksize))
             if chunk.crs != city_boundary.crs:
                 chunk = chunk.to_crs(city_boundary.crs)
-            chunk_in_city = gpd.sjoin(chunk, city_boundary, predicate='within')
+            chunk_in_city = gpd.sjoin(chunk, city_boundary, predicate='intersects') # within to intersects
             if not chunk_in_city.empty:
                 city_buildings = pd.concat([city_buildings, chunk_in_city])
 
@@ -126,7 +126,6 @@ def process_city_buildings(city_name, city_boundary, annual_solar_gdf, avg_rate)
     return result
 
 
-
 for city_name in target_cities:
     city_boundary = cities[cities['NAME'] == city_name].to_crs('EPSG:4326')
 
@@ -136,9 +135,17 @@ for city_name in target_cities:
 
     result = process_city_buildings(city_name, city_boundary, annual_solar_gdf, avg_rate)
 
-    # Save processed data as GeoJSON
-    output_file = f'data/processed/{city_name.lower()}_solar_potential.geojson'
-    result.to_file(output_file, driver='GeoJSON')
-    print(f"Saved processed data for {city_name} to {output_file}")
+    if result is not None and not result.empty:
+        # Save processed data as GeoJSON
+        output_file = f'data/processed/{city_name.lower()}_solar_potential.geojson'
+        result.to_file(output_file, driver='GeoJSON')
+        print(f"Saved processed data for {city_name} to {output_file}")
+
+        # Print some statistics
+        print(f"Total buildings processed: {len(result)}")
+        print(f"Total annual solar potential: {result['annual_solar_potential_kwh'].sum():.2f} kWh")
+        print(f"Total annual estimated savings: ${result['annual_estimated_savings_usd'].sum():.2f}")
+    else:
+        print(f"No data to save for {city_name}")
 
 print("Data processing complete!")
