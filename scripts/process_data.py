@@ -37,8 +37,10 @@ print("Solar radiation data processed.")
 # Load electricity rates
 print("Loading and processing electricity rates...")
 electricity_rates = pd.read_csv('data/raw/electricity_rates/eia_arizona_rates.csv')
-avg_rate = electricity_rates['Arizona : residential cents per kilowatthour'].mean() / 100  # Convert to dollars per kWh
-print(f"Average electricity rate: ${avg_rate:.4f} per kWh")
+electricity_rates['date'] = pd.to_datetime(electricity_rates['date'])
+latest_12_months = electricity_rates.sort_values('date', ascending=False).head(12)
+avg_rate = latest_12_months['Arizona : residential cents per kilowatthour'].mean() / 100  # Convert to dollars per kWh
+print(f"Average electricity rate for the latest 12 months: ${avg_rate:.4f} per kWh")
 
 # Load city boundaries
 print("Loading city boundaries...")
@@ -56,6 +58,7 @@ def calculate_solar_potential(row, avg_rate):
     system_losses = 0.14  # 14% system losses
     azimuth = 180  # Assuming south-facing panels
     tilt = 20  # Assuming 20-degree tilt
+    average_solar_hours_per_day = 6  # Approximate average for Arizona, adjust as needed
 
     # Calculate plane of array (POA) irradiance
     poa_direct = row['DNI'] * np.cos(np.radians(tilt))
@@ -66,8 +69,8 @@ def calculate_solar_potential(row, avg_rate):
     # Calculate solar potential (kWh per year)
     solar_potential = row['roof_area'] * poa_total * panel_efficiency * (1 - system_losses) * 365 / 1000
 
-    # Calculate estimated savings
-    estimated_savings = solar_potential * avg_rate
+    # Calculate estimated savings (only during solar hours)
+    estimated_savings = solar_potential * avg_rate * (average_solar_hours_per_day / 24)
 
     return pd.Series({
         'annual_solar_potential_kwh': solar_potential,
@@ -101,13 +104,13 @@ def process_city_buildings(city_name, city_boundary, annual_solar_gdf, avg_rate)
         annual_solar_gdf = annual_solar_gdf.rename(columns={'index_right': 'index_right_solar'})
 
 
-    city_solar = gpd.sjoin_nearest(city_buildings, annual_solar_gdf, max_distance=0.01)
+    city_solar = gpd.sjoin_nearest(city_buildings, annual_solar_gdf, max_distance=0.045)
 
 
     city_solar = city_solar.drop(columns=['index_right'], errors='ignore')
 
 
-    city_solar['roof_area'] = city_solar.geometry.area  # Assuming the CRS is in meters
+    city_solar['roof_area'] = city_solar.geometry.to_crs(epsg=32612).area  # Assuming the CRS is in meters
     city_solar[['annual_solar_potential_kwh', 'annual_estimated_savings_usd']] = city_solar.apply(
         calculate_solar_potential, avg_rate=avg_rate, axis=1)
 
