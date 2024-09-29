@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+scripts/Process_data_new.py
 
 # Virtual environment
 venv/
@@ -18,3 +19,4 @@ Thumbs.db
 NSRDB Raw
 processed_solar_data.parquet
 data/raw
+data/processed
