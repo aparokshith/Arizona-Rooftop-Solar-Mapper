@@ -2,6 +2,7 @@ import streamlit as st
 import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
+
 # Set page configuration
 st.set_page_config(page_title="Arizona Building Footprints Viewer", layout="wide")
 
@@ -12,15 +13,16 @@ def load_city_boundaries():
 
 
 @st.cache_data
-def load_buildings(city_name, city_boundary):
-    all_buildings = gpd.read_file('data/raw/building_footprints/Arizona.geojson')
-    all_buildings = all_buildings.to_crs(city_boundary.crs)
-    city_buildings = gpd.sjoin(all_buildings, city_boundary, predicate='intersects')
-    return city_buildings
+def load_all_buildings():
+    return gpd.read_file('data/raw/building_footprints/Arizona.geojson')
 
 
 # Load city boundaries
 cities = load_city_boundaries()
+
+# Load all buildings (this may take a while, but it's cached)
+with st.spinner("Loading all building data for Arizona..."):
+    all_buildings = load_all_buildings()
 
 # Sidebar for city selection
 st.sidebar.title("City Selection")
@@ -34,9 +36,10 @@ if city_name:
     city_boundary = cities[cities['NAME'] == city_name]
 
     if not city_boundary.empty:
-        # Load buildings for the selected city
-        with st.spinner(f"Loading buildings for {city_name}..."):
-            city_buildings = load_buildings(city_name, city_boundary)
+        # Filter buildings for the selected city
+        with st.spinner(f"Filtering buildings for {city_name}..."):
+            all_buildings = all_buildings.to_crs(city_boundary.crs)
+            city_buildings = gpd.sjoin(all_buildings, city_boundary, predicate='intersects')
 
         st.write(f"Total buildings found: {len(city_buildings)}")
 
