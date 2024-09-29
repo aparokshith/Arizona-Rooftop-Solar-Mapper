@@ -37,7 +37,7 @@ print("Solar radiation data processed.")
 # Load electricity rates
 print("Loading and processing electricity rates...")
 electricity_rates = pd.read_csv('data/raw/electricity_rates/eia_arizona_rates.csv')
-electricity_rates['date'] = pd.to_datetime(electricity_rates['date'])
+electricity_rates['date'] = pd.to_datetime(electricity_rates['Month'])
 latest_12_months = electricity_rates.sort_values('date', ascending=False).head(12)
 avg_rate = latest_12_months['Arizona : residential cents per kilowatthour'].mean() / 100  # Convert to dollars per kWh
 print(f"Average electricity rate for the latest 12 months: ${avg_rate:.4f} per kWh")
@@ -49,7 +49,7 @@ print("City boundaries loaded.")
 
 # Define target cities
 # target_cities = ['Phoenix', 'Tucson', 'Tempe', 'Mesa', 'Flagstaff']
-target_cities = ['Phoenix']
+target_cities = ['Tempe']
 
 
 def calculate_solar_potential(row, avg_rate):
