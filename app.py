@@ -2,7 +2,11 @@ import streamlit as st
 import folium
 from streamlit_folium import folium_static
 import geopandas as gpd
-import json
+import os
+import numpy as np
+
+if not os.environ.get("STREAMLIT_SERVER_MAX_UPLOAD_SIZE"):
+    os.environ["STREAMLIT_SERVER_MAX_UPLOAD_SIZE"] = "350"
 
 # Set page configuration
 st.set_page_config(page_title="Arizona Rooftop Solar Potential Mapper", layout="wide")
@@ -13,7 +17,7 @@ st.title("Arizona Rooftop Solar Potential Mapper")
 # Sidebar for city selection
 city = st.sidebar.selectbox(
     "Choose a city",
-    ["Phoenix", "Tucson", "Tempe", "Mesa", "Flagstaff"]
+    ["Tempe"]
 )
 
 @st.cache_data
@@ -27,12 +31,31 @@ data = load_data(city)
 # Create map
 m = folium.Map(location=[data.geometry.centroid.y.mean(), data.geometry.centroid.x.mean()], zoom_start=12)
 
+
+def calculate_ranges(data):
+    solar_potentials = data['annual_solar_potential_kwh'].values
+
+    # Calculate min, max, and range size using NumPy for efficiency
+    min_potential = np.min(solar_potentials)
+    max_potential = np.max(solar_potentials)
+    range_size = (max_potential - min_potential) / 3
+
+    # Calculate and return the ranges
+    return [
+        min_potential + range_size,
+        min_potential + 2 * range_size,
+        max_potential
+    ]
+
+# Calculate the ranges
+ranges = calculate_ranges(data)
+
 # Function to style the GeoJSON features
 def style_function(feature):
     solar_potential = feature['properties']['annual_solar_potential_kwh']
-    if solar_potential > 10000:
+    if solar_potential > ranges[1]:
         color = '#ff0000'  # Red for high potential
-    elif solar_potential > 5000:
+    elif solar_potential > ranges[0]:
         color = '#ffff00'  # Yellow for medium potential
     else:
         color = '#00ff00'  # Green for low potential
@@ -63,12 +86,12 @@ st.write(f"Total Buildings: {len(data)}")
 st.write(f"Average Solar Potential: {data['annual_solar_potential_kwh'].mean():.2f} kWh")
 st.write(f"Total Estimated Savings: ${data['annual_estimated_savings_usd'].sum():.2f}")
 
-# Optional: Add a chart
-import plotly.express as px
-
-fig = px.histogram(data, x="annual_solar_potential_kwh", nbins=50,
-                   title=f"Distribution of Annual Solar Potential in {city}")
-st.plotly_chart(fig)
+# # Optional: Add a chart
+# import plotly.express as px
+#
+# fig = px.histogram(data, x="annual_solar_potential_kwh", nbins=50,
+#                    title=f"Distribution of Annual Solar Potential in {city}")
+# st.plotly_chart(fig)
 
 # Add information about the project
 st.sidebar.info(
