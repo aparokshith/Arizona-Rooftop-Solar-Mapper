@@ -3,6 +3,7 @@ import geopandas as gpd
 import numpy as np
 from shapely.geometry import Point
 import os
+import  pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
 import fiona
@@ -48,8 +49,8 @@ cities = gpd.read_file('data/raw/city_boundaries/tl_2023_04_place.shp')
 print("City boundaries loaded.")
 
 # Define target cities
-# target_cities = ['Phoenix', 'Tucson', 'Tempe', 'Mesa', 'Flagstaff']
-target_cities = ['Tempe']
+target_cities = ['Phoenix', 'Tucson', 'Tempe', 'Mesa', 'Flagstaff']
+
 
 
 def calculate_solar_potential(row, avg_rate):
@@ -140,8 +141,12 @@ for city_name in target_cities:
 
     if result is not None and not result.empty:
         # Save processed data as GeoJSON
-        output_file = f'data/processed/{city_name.lower()}_solar_potential.geojson'
-        result.to_file(output_file, driver='GeoJSON')
+        # output_file = f'data/processed/{city_name.lower()}_solar_potential.geojson'
+        output_file = f'data/processed/{city_name.lower()}_solar_potential.parquet'
+        result['geometry'] = result['geometry'].apply(lambda geom: geom.wkb)
+        table = pa.Table.from_pandas(result)
+        pq.write_table(table, output_file)
+        # result.to_file(output_file, driver='GeoJSON')
         print(f"Saved processed data for {city_name} to {output_file}")
 
         # Print some statistics
