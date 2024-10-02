@@ -14,10 +14,6 @@ click==8.1.7
 click-plugins==1.1.1
 cligj==0.7.2
 colorama==0.4.6
-conda==24.7.1
-conda-libmamba-solver==24.7.0
-conda-package-handling==2.3.0
-conda_package_streaming==0.10.0
 contourpy==1.2.0
 cycler==0.11.0
 decorator==5.1.1
@@ -29,7 +25,6 @@ frozendict==2.4.2
 GDAL==3.6.2
 geopandas==0.14.4
 gitdb==4.0.7
-GitPython==3.1.43
 idna==3.7
 importlib-metadata==7.0.1
 Jinja2==3.1.4
@@ -39,7 +34,6 @@ jsonpointer==2.1
 jsonschema==4.19.2
 jsonschema-specifications==2023.7.1
 kiwisolver==1.4.4
-libmambapy==1.5.8
 mapclassify==2.5.0
 markdown-it-py==2.2.0
 MarkupSafe==2.1.3
