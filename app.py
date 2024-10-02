@@ -1,107 +1,97 @@
 import streamlit as st
+import geopandas as gpd
+import pyarrow.parquet as pq
+import os
+from shapely import wkb
 import folium
 from streamlit_folium import folium_static
-import geopandas as gpd
-import os
-import numpy as np
-
-if not os.environ.get("STREAMLIT_SERVER_MAX_UPLOAD_SIZE"):
-    os.environ["STREAMLIT_SERVER_MAX_UPLOAD_SIZE"] = "350"
+from shapely.geometry import mapping
 
 # Set page configuration
 st.set_page_config(page_title="Arizona Rooftop Solar Potential Mapper", layout="wide")
 
+# Constants
+DATA_FOLDER = 'data/processed'
+CHUNK_SIZE = 10000
+
 # Title
 st.title("Arizona Rooftop Solar Potential Mapper")
 
-# Sidebar for city selection
-city = st.sidebar.selectbox(
-    "Choose a city",
-    ["Tempe"]
-)
 
 @st.cache_data
-def load_data(city):
-    gdf = gpd.read_file(f"data/processed/{city.lower()}_solar_potential.geojson")
-    return gdf
-
-# Load data
-data = load_data(city)
-
-# Create map
-m = folium.Map(location=[data.geometry.centroid.y.mean(), data.geometry.centroid.x.mean()], zoom_start=12)
+def get_available_cities():
+    return sorted([f.split('_')[0].capitalize() for f in os.listdir(DATA_FOLDER) if f.endswith('.parquet')])
 
 
-def calculate_ranges(data):
-    solar_potentials = data['annual_solar_potential_kwh'].values
+def load_city_data_in_chunks(city):
+    file_path = os.path.join(DATA_FOLDER, f"{city.lower()}_solar_potential.parquet")
+    parquet_file = pq.ParquetFile(file_path)
 
-    # Calculate min, max, and range size using NumPy for efficiency
-    min_potential = np.min(solar_potentials)
-    max_potential = np.max(solar_potentials)
-    range_size = (max_potential - min_potential) / 3
+    for batch in parquet_file.iter_batches(batch_size=CHUNK_SIZE):
+        df = batch.to_pandas()
+        df['geometry'] = df['geometry'].apply(wkb.loads)
+        yield gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
 
-    # Calculate and return the ranges
-    return [
-        min_potential + range_size,
-        min_potential + 2 * range_size,
-        max_potential
-    ]
 
-# Calculate the ranges
-ranges = calculate_ranges(data)
+def create_map(city):
+    m = folium.Map(zoom_start=11)
 
-# Function to style the GeoJSON features
-def style_function(feature):
-    solar_potential = feature['properties']['annual_solar_potential_kwh']
-    if solar_potential > ranges[1]:
-        color = '#ff0000'  # Red for high potential
-    elif solar_potential > ranges[0]:
-        color = '#ffff00'  # Yellow for medium potential
-    else:
-        color = '#00ff00'  # Green for low potential
-    return {
-        'fillColor': color,
-        'color': 'black',
-        'weight': 1,
-        'fillOpacity': 0.7
-    }
+    buildings = folium.FeatureGroup(name="Buildings")
 
-# Add GeoJSON to map
-folium.GeoJson(
-    data,
-    style_function=style_function,
-    tooltip=folium.GeoJsonTooltip(
-        fields=['building_id', 'roof_area_sqm', 'annual_solar_potential_kwh', 'annual_estimated_savings_usd'],
-        aliases=['Building ID', 'Roof Area (sq m)', 'Annual Solar Potential (kWh)', 'Annual Estimated Savings ($)'],
-        style=("background-color: white; color: #333333; font-family: arial; font-size: 12px; padding: 10px;")
-    )
-).add_to(m)
+    for chunk in load_city_data_in_chunks(city):
+        for _, row in chunk.iterrows():
+            folium.GeoJson(
+                {
+                    'type': 'Feature',
+                    'geometry': mapping(row['geometry']),
+                    'properties': {
+                        'building_id': row['building_id'],
+                        'roof_area_sqm': row['roof_area_sqm'],
+                        'annual_solar_potential_kwh': row['annual_solar_potential_kwh'],
+                        'annual_estimated_savings_usd': row['annual_estimated_savings_usd']
+                    }
+                },
+                style_function=lambda x: {
+                    'fillColor': 'blue',
+                    'color': 'black',
+                    'weight': 1,
+                    'fillOpacity': 0.7
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['building_id', 'roof_area_sqm', 'annual_solar_potential_kwh',
+                            'annual_estimated_savings_usd'],
+                    aliases=['Building ID', 'Roof Area (sq m)', 'Annual Solar Potential (kWh)',
+                             'Annual Estimated Savings ($)'],
+                    style=(
+                        "background-color: white; color: #333333; font-family: arial; font-size: 12px; padding: 10px;")
+                )
+            ).add_to(buildings)
 
-# Display map
-st_data = folium_static(m, width=1200, height=600)
+    buildings.add_to(m)
+    folium.LayerControl().add_to(m)
 
-# Display statistics
-st.subheader("City Statistics")
-st.write(f"Total Buildings: {len(data)}")
-st.write(f"Average Solar Potential: {data['annual_solar_potential_kwh'].mean():.2f} kWh")
-st.write(f"Total Estimated Savings: ${data['annual_estimated_savings_usd'].sum():.2f}")
+    return m
 
-# # Optional: Add a chart
-# import plotly.express as px
-#
-# fig = px.histogram(data, x="annual_solar_potential_kwh", nbins=50,
-#                    title=f"Distribution of Annual Solar Potential in {city}")
-# st.plotly_chart(fig)
 
-# Add information about the project
-st.sidebar.info(
-    "This app visualizes the solar potential for rooftops in major Arizona cities. "
-    "The data is based on building footprints, solar radiation data, and "
-    "simplified solar potential calculations."
-)
+# Sidebar for city selection
+available_cities = get_available_cities()
+city = st.sidebar.selectbox("Choose a city", available_cities)
 
-# Add a disclaimer
-st.sidebar.warning(
-    "Disclaimer: This tool provides estimates based on simplified calculations. "
-    "For accurate assessments, please consult with a professional solar installer."
-)
+# Create and display map
+st.subheader(f"Solar Potential Map - {city}")
+map_obj = create_map(city)
+folium_static(map_obj)
+
+# Calculate and display basic information
+total_buildings = 0
+total_solar_potential = 0
+total_estimated_savings = 0
+
+for chunk in load_city_data_in_chunks(city):
+    total_buildings += len(chunk)
+    total_solar_potential += chunk['annual_solar_potential_kwh'].sum()
+    total_estimated_savings += chunk['annual_estimated_savings_usd'].sum()
+
+st.sidebar.write(f"Total buildings: {total_buildings:,}")
+st.sidebar.write(f"Total solar potential: {total_solar_potential:,.2f} kWh")
+st.sidebar.write(f"Total estimated savings: ${total_estimated_savings:,.2f}")
