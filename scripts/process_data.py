@@ -149,7 +149,6 @@ for city_name in target_cities:
         # result.to_file(output_file, driver='GeoJSON')
         print(f"Saved processed data for {city_name} to {output_file}")
 
-        # Print some statistics
         print(f"Total buildings processed: {len(result)}")
         print(f"Total annual solar potential: {result['annual_solar_potential_kwh'].sum():.2f} kWh")
         print(f"Total annual estimated savings: ${result['annual_estimated_savings_usd'].sum():.2f}")
