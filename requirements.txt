@@ -1,5 +1,4 @@
 fiona==1.9.5
-folium==0.14.0
 folium==0.17.0
 geopandas==0.14.4
 numpy==2.1.1
